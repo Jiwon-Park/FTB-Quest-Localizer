@@ -2,11 +2,12 @@ import fs from "fs";
 import inquirer from "inquirer";
 import Translator from "./modules/translate.js";
 import langs from "./langs.js";
+import JSZip from "jszip";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-async function questExtract(chapterFile, modPackName, isTranslate, targetLang) {
+async function questExtract(chapterFile, modPackName, isTranslate, targetLang, targetLocale) {
   const chapter = chapterFile.replace(".snbt", "");
   const questChapter = fs
     .readFileSync(`./ftbquests/quests/chapters/${chapterFile}`, "utf-8")
@@ -126,33 +127,42 @@ async function questExtract(chapterFile, modPackName, isTranslate, targetLang) {
   }
 
   if (isTranslate) {
-    if (fs.existsSync(`./output/${modPackName}/translated.json`)) {
+    if (fs.existsSync(`./output/${modPackName}/${targetLang}_${targetLocale}.json`)) {
       const langFile = fs.readFileSync(
-        `./output/${modPackName}/translated.json`,
+        `./output/${modPackName}/${targetLang}_${targetLocale}.json`,
         "utf-8"
       );
       translatedLang = { ...translatedLang, ...JSON.parse(langFile) };
       fs.writeFileSync(
-        `./output/${modPackName}/translated.json`,
+        `./output/${modPackName}/${targetLang}_${targetLocale}.json`,
         JSON.stringify(translatedLang, null, 2)
       );
     } else {
       fs.writeFileSync(
-        `./output/${modPackName}/translated.json`,
+        `./output/${modPackName}/${targetLang}_${targetLocale}.json`,
         JSON.stringify(translatedLang, null, 2)
       );
     }
+    const zip = new JSZip();
+    const mcmeta = {"pack": {"pack_format": 15, "description": `${modPackName} FTBQuest ${targetLang}_${targetLocale} translation pack`}}
+    zip.file("pack.mcmeta", JSON.stringify(mcmeta));
+    const lang = zip.folder("assets").folder("kubejs").folder("lang")
+    lang.file(`${targetLang}_${targetLocale}.json`, fs.readFileSync(`./output/${modPackName}/${targetLang}_${targetLocale}.json`, "utf-8"))
+    lang.file("en_us.json", fs.readFileSync(`./output/${modPackName}/en_us.json`, "utf-8"))
+    zip.generateAsync({type:"nodebuffer"}).then(function(content) {
+      fs.writeFileSync(`./output/${modPackName}/${modPackName}ResourcePack_${targetLang}_${targetLocale}.zip`, content);
+    });
   }
   console.log(`${chapterFile} done`);
 }
 
-function run(modPackName, isTranslate, targetLang) {
+function run(modPackName, isTranslate, targetLang, targetLocale) {
   fs.readdir(`./ftbquests/quests/chapters`, function (err, fileLists) {
     if (err) {
       return console.error("'./ftbquests/quests/chapters' directory not found");
     }
     fileLists.map((file) =>
-      questExtract(file, modPackName, isTranslate, targetLang)
+      questExtract(file, modPackName, isTranslate, targetLang, targetLocale)
     );
   });
 }
@@ -164,7 +174,7 @@ function prompt() {
       message: `Enter the modpack name to display in the json key:`,
       type: "input",
       filter: (value) => {
-        const valid = /[`~!@#$%^&*()_|+\-=?;:'",.<>\{\}\[\]\\\/ ]/gm;
+        const valid = /[~"#%&*:<>?/\\{|}]+/gm;
         const result = value.replace(valid, "");
         return result;
       },
@@ -199,6 +209,16 @@ function prompt() {
         }
       },
     },
+    {
+        name: "targetLocale",
+        message: "Enter target locale (e.g. us, kr, es):",
+        type: "input",
+        when: (answers) => {
+          if (answers.isTranslate === true) {
+            return true;
+        }
+      }
+    },
   ]);
 }
 
@@ -211,5 +231,5 @@ function prompt() {
   );
   console.info("Output is created in the output directory");
   const answers = await prompt();
-  run(answers.modPackName, answers.isTranslate, answers.targetLang);
+  run(answers.modPackName, answers.isTranslate, answers.targetLang, answers.targetLocale);
 })();
