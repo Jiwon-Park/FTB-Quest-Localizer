@@ -1,7 +1,10 @@
 import fs from "fs";
 import inquirer from "inquirer";
-import translate from "./modules/translate.js";
+import Translator from "./modules/translate.js";
 import langs from "./langs.js";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 async function questExtract(chapterFile, modPackName, isTranslate, targetLang) {
   const chapter = chapterFile.replace(".snbt", "");
@@ -50,6 +53,8 @@ async function questExtract(chapterFile, modPackName, isTranslate, targetLang) {
       const sourceStrings = removeEmpty(
         array.flatMap((el) => getString(el, `${part}`))
       );
+      const translator = new Translator();
+      translator.initDeepL(process.env.DEEPL_AUTH_KEY);
 
       let translatedStrings;
       if (isTranslate) {
@@ -58,7 +63,7 @@ async function questExtract(chapterFile, modPackName, isTranslate, targetLang) {
             if (sourceString.match(imageRegex)) {
               return sourceString;
             }
-            return translate(
+            return translator.deeplTranslate(
               sourceString.replace(colorCodeRegex, addQuotes),
               targetLang
             );
